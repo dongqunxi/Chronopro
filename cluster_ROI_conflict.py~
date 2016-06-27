@@ -138,5 +138,4 @@ del X, Z
 #brain.set_data_time_index(0)
 #brain.show_view('lateral')
 #brain.save_image(fn_fig)
-# blue blobs are for condition A < condition B, red for A > B
 

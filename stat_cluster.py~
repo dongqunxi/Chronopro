@@ -1,7 +1,6 @@
 ''' This version makes a unified inverse operator for each subject. Since the cortical info is 
     the same for all the evoked data from one subject, we only calculate one inverse 
     operator on 'LLst' evoked data. 
-    To reduce the time consuming, funcction 'mv_ave' is used for reduce the size of timepoints.
 '''
 from mne import (spatial_tris_connectivity,
                  grade_to_tris)
