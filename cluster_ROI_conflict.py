@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 
 """
 .. _tut_stats_cluster_source_1samp:
@@ -16,7 +17,7 @@ permutation test across space and time.
 
 """
 # Authors: Dong Qunxi <dongqunxi@gmail.com>
-#          Jürgen Dammers <j.dammers@fz-juelich.de>
+#         Jürgen Dammers <j.dammers@fz-juelich.de>
 # License: BSD (3-clause)
 
 import os, glob
@@ -41,8 +42,8 @@ res_min = -0.3
 res_max = 0.1 
 
 # Set the option for conflicts perception or conflicts response
-conf_per = True
-conf_res = False
+conf_per = False
+conf_res = True
 
 # Preparing for ROIs clusterring, if all are set false, 
 # processed array is loaded directly

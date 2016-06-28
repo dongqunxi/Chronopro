@@ -161,7 +161,7 @@ def stat_clus(X, tstep, fsave_vertices, p_threshold=0.01, p=0.01, n_subjects=14,
     print('Clustering.')
     T_obs, clusters, cluster_p_values, H0 = clu = \
         spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1,
-                                        threshold=t_threshold)
+                                        threshold=t_threshold, n_permutations=512)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
     #    is multiple-comparisons corrected).
     good_cluster_inds = np.where(cluster_p_values < p)[0]
