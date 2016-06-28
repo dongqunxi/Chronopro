@@ -44,9 +44,7 @@ def apply_inverse_ave(fnevo, min_subject='fsaverage'):
                                                      depth=0.8, limit_depth_chs=False)
         write_inverse_operator(fn_inv, inv)
         
-def apply_STC_ave(fnevo, method='dSPM', snr=3.0, event='LLst', 
-                      baseline=True, btmin=-0.3, btmax=-0.1, 
-                      min_subject='fsaverage'):
+def apply_STC_ave(fnevo, method='dSPM', snr=3.0, min_subject='fsaverage'):
     ''' Inverse evoked data into the source space. 
         Parameter
         ---------
@@ -75,15 +73,10 @@ def apply_STC_ave(fnevo, method='dSPM', snr=3.0, event='LLst',
     for fname in fnlist:
         name = os.path.basename(fname)
         fn_path = os.path.split(fname)[0]
-        stc_name = name[:name.rfind('-ave.fif')] 
+        fn_stc = fname[:fname.rfind('-ave.fif')] 
         #fn_inv = fname[:fname.rfind('-ave.fif')] + ',ave-inv.fif' 
         subject = name.split('_')[0]
         fn_inv = fn_path + '/%s_fibp1-45,ave-inv.fif' %subject
-        min_dir = subjects_dir + '/%s' %min_subject
-        # this path used for ROI definition
-        stc_path = min_dir + '/%s_ROIs/%s' %(method,subject)
-        #fn_cov = meg_path + '/%s_empty,fibp1-45,nr-cov.fif' % subject
-        set_directory(stc_path) 
         snr = snr
         lambda2 = 1.0 / snr ** 2 
         #noise_cov = mne.read_cov(fn_cov)
@@ -92,17 +85,34 @@ def apply_STC_ave(fnevo, method='dSPM', snr=3.0, event='LLst',
         inv = read_inverse_operator(fn_inv)
         stc = apply_inverse(evoked, inv, lambda2, method,
                             pick_ori='normal')
+        stc.save(fn_stc)
+        
+
+def morph_STC(fn_stc, grade, template='fsaverage', event='LLst', 
+              baseline=True, btmin=-0.3, btmax=-0.1):
+    from mne import read_source_estimate, morph_data
+    fnlist = get_files_from_list(fn_stc) 
+    for fname in fnlist:  
+        name = os.path.basename(fname)
+        subject = name.split('_')[0]
+        stc_name = name[:name.rfind('-ave.fif')] 
+        min_dir = subjects_dir + '/%s' %template
+        # this path used for ROI definition
+        stc_path = min_dir + '/DSPM_ROIs/%s' %(subject)
+        #fn_cov = meg_path + '/%s_empty,fibp1-45,nr-cov.fif' % subject
+        set_directory(stc_path) 
         # Morph STC
-        stc_morph = stc.morph('fsaverage')
+        stc = read_source_estimate(fname)
+        stc_morph = morph_data(subject, template, stc, grade=grade)
         stc_morph.save(stc_path + '/%s' % (stc_name), ftype='stc')
         if baseline == True:
             stc_base = stc_morph.crop(btmin, btmax)
-            stc_base.save(stc_path + '/%s_%s_baseline' % (subject, event), ftype='stc')
-            
+            stc_base.save(stc_path + '/%s_%s_baseline' % (subject, event), ftype='stc') 
+                    
 def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, template='fsaverage'):
     con_stcs = []
     for evt in evt_list[:2]:
-        fn_stc_list1 = glob.glob(subjects_dir+'/fsaverage/dSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        fn_stc_list1 = glob.glob(subjects_dir+'/fsaverage/DSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
         for fn_stc1 in fn_stc_list1[:n_subjects]:
             stc1 = mne.read_source_estimate(fn_stc1, subject=template)
             stc1.crop(tmin, tmax)
@@ -116,7 +126,7 @@ def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, templat
    
     incon_stcs = []
     for evt in evt_list[2:]:
-        fn_stc_list2 = glob.glob(subjects_dir+'/fsaverage/dSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        fn_stc_list2 = glob.glob(subjects_dir+'/fsaverage/DSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
         for fn_stc2 in fn_stc_list2[:n_subjects]:
             stc2 = mne.read_source_estimate(fn_stc2, subject=template)
             stc2.crop(tmin, tmax)

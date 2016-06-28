@@ -22,7 +22,8 @@ permutation test across space and time.
 
 import os, glob
 #from dirs_manage import set_directory
-from stat_cluster import stat_clus, Ara_contr, apply_inverse_ave, apply_STC_ave, mv_ave
+from stat_cluster import stat_clus, Ara_contr, apply_inverse_ave, \
+                         apply_STC_ave, morph_STC, mv_ave
 print(__doc__)
 
 ###############################################################################
@@ -40,18 +41,26 @@ st_max = 0.4
 st_min = 0
 res_min = -0.3
 res_max = 0.1 
-# The parameter for t-test
+# The spatial resolution parameter for morphing, grade=4: 5124 vertices; 
+# grade=5: 20484 vertices
+grade = 4
+# Moving average across timepoints, to reduce the sample size at the time dimension.
+mv_window = 20 # miliseconds
+overlap = 10 # miliseconds
+# The parameters for t-test
 n_permutation = 512
+p_th = 0.001
+p_v = 0.05
 # Set the option for conflicts perception or conflicts response
-conf_per = False
-conf_res = True
+conf_per = True
+conf_res = False
 
 # Preparing for ROIs clusterring, if all are set false, 
 # processed array is loaded directly
 do_apply_invers_ave = False
-do_apply_STC_ave = False
-do_calc_matrix = False
-   
+do_apply_STC_ave = True
+do_morph_STC_ave = True
+do_calc_matrix = True 
 #conflicts perception
 if conf_per == True:
     evt_list = st_list
@@ -90,43 +99,50 @@ if do_apply_STC_ave:
     print '>>> Calculate STC ....'
     for evt in evt_list:
         fn_evt_list = glob.glob(subjects_dir+'/*[0-9]/MEG/*fibp1-45,evtW_%s_bc-ave.fif' %evt)
-        apply_STC_ave(fn_evt_list, event=evt, baseline=baseline)
+        apply_STC_ave(fn_evt_list)
     print '>>> FINISHED with STC generation.'
     print ''
         
-
+###############################################################################
+# Morph STC data for each condition
+# ------------------------------------------------
+if do_morph_STC_ave:
+    print '>>> Calculate STC ....'
+    for evt in evt_list:
+        fn_stc_list = glob.glob(subjects_dir+'/*[0-9]/MEG/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        morph_STC(fn_stc_list, grade=grade, event=evt, baseline=baseline)
+    print '>>> FINISHED with morphed STC generation.'
+    print ''
 
 ###############################################################################
 # conflicts contrasts
 # -----------------
-if do_calc_matrix:
-    tstep, fsave_vertices, X = Ara_contr(evt_list, tmin, tmax, conf_type, 
-                                             stcs_path, n_subjects=n_subjects)
-else:
-    import numpy as np
-    fnmat = stcs_path + conf_type + '.npz'
-    npz = np.load(fnmat)
-    tstep = npz['tstep'].flatten()[0]
-    fsave_vertices = npz['fsave_vertices']
-    X = npz['X']
-    
-# Moving average across timepoints, to reduce the sample size at the time dimension.
-mv_window = 20 # miliseconds
-overlap = 10 # miliseconds
-X = mv_ave(X, mv_window, overlap, freqs=678.17)
-
-# Left conflict contrasts
-Y = X[:, :, :n_subjects, 1] - X[:, :, :n_subjects, 0]  # make paired contrast
-fn_stc_out = stcs_path + 'mv_left_%s' %conf_type
-stat_clus(Y, tstep, fsave_vertices, n_permutation, p_threshold=0.01, p=0.05,  n_subjects=n_subjects, fn_stc_out=fn_stc_out)
-print Y.shape
-del Y
-# Right conflict contrasts
-Z = X[:, :, n_subjects:, 1] - X[:, :, n_subjects:, 0]  # make paired contrast
-fn_stc_out = stcs_path + 'mv_right_%s' %conf_type
-stat_clus(Z, tstep, fsave_vertices, n_per=n_permutation, p_threshold=0.01, p=0.05, n_subjects=n_subjects, fn_stc_out=fn_stc_out)
-print X.shape, Z.shape
-del X, Z
+#if do_calc_matrix:
+#    tstep, fsave_vertices, X = Ara_contr(evt_list, tmin, tmax, conf_type, 
+#                                             stcs_path, n_subjects=n_subjects)
+#else:
+#    import numpy as np
+#    fnmat = stcs_path + conf_type + '.npz'
+#    npz = np.load(fnmat)
+#    tstep = npz['tstep'].flatten()[0]
+#    fsave_vertices = npz['fsave_vertices']
+#    X = npz['X']
+#    
+#
+#X = mv_ave(X, mv_window, overlap, freqs=678.17)
+#
+## Left conflict contrasts
+#Y = X[:, :, :n_subjects, 1] - X[:, :, :n_subjects, 0]  # make paired contrast
+#fn_stc_out = stcs_path + 'g4perm_mv_left_%s' %conf_type
+#stat_clus(Y, tstep, fsave_vertices, n_permutation, p_threshold=p_th, p=p_v,  n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+#print Y.shape
+#del Y
+## Right conflict contrasts
+#Z = X[:, :, n_subjects:, 1] - X[:, :, n_subjects:, 0]  # make paired contrast
+#fn_stc_out = stcs_path + 'g4perm_mv_right_%s' %conf_type
+#stat_clus(Z, tstep, fsave_vertices, n_per=n_permutation, p_threshold=p_th, p=p_v, n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+#print X.shape, Z.shape
+#del X, Z
 
 ###############################################################################
 # plot significant clusters
