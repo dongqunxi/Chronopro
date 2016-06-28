@@ -40,7 +40,8 @@ st_max = 0.4
 st_min = 0
 res_min = -0.3
 res_max = 0.1 
-
+# The parameter for t-test
+n_permutation = 512
 # Set the option for conflicts perception or conflicts response
 conf_per = False
 conf_res = True
@@ -117,13 +118,13 @@ X = mv_ave(X, mv_window, overlap, freqs=678.17)
 # Left conflict contrasts
 Y = X[:, :, :n_subjects, 1] - X[:, :, :n_subjects, 0]  # make paired contrast
 fn_stc_out = stcs_path + 'mv_left_%s' %conf_type
-stat_clus(Y, tstep, fsave_vertices, p_threshold=0.01, p=0.05,  n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+stat_clus(Y, tstep, fsave_vertices, n_permutation, p_threshold=0.01, p=0.05,  n_subjects=n_subjects, fn_stc_out=fn_stc_out)
 print Y.shape
 del Y
 # Right conflict contrasts
 Z = X[:, :, n_subjects:, 1] - X[:, :, n_subjects:, 0]  # make paired contrast
 fn_stc_out = stcs_path + 'mv_right_%s' %conf_type
-stat_clus(Z, tstep, fsave_vertices, p_threshold=0.01, p=0.05, n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+stat_clus(Z, tstep, fsave_vertices, n_per=n_permutation, p_threshold=0.01, p=0.05, n_subjects=n_subjects, fn_stc_out=fn_stc_out)
 print X.shape, Z.shape
 del X, Z
 

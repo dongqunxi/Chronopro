@@ -148,7 +148,7 @@ def mv_ave(X, window, overlap, freqs=678.17):
     N_X = np.array(N_X).transpose(1,0,2,3) 
     return N_X    
     
-def stat_clus(X, tstep, fsave_vertices, p_threshold=0.01, p=0.01, n_subjects=14, 
+def stat_clus(X, tstep, fsave_vertices, n_per=1024, p_threshold=0.01, p=0.01, n_subjects=14, 
                   fn_stc_out=None):
     print('Computing connectivity.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
@@ -161,7 +161,7 @@ def stat_clus(X, tstep, fsave_vertices, p_threshold=0.01, p=0.01, n_subjects=14,
     print('Clustering.')
     T_obs, clusters, cluster_p_values, H0 = clu = \
         spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1,
-                                        threshold=t_threshold, n_permutations=512)
+                                        threshold=t_threshold, n_permutations=n_per)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
     #    is multiple-comparisons corrected).
     good_cluster_inds = np.where(cluster_p_values < p)[0]
