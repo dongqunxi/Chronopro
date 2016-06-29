@@ -6,7 +6,7 @@
 from mne import (spatial_tris_connectivity,
                  grade_to_tris)
 from mne.stats import (spatio_temporal_cluster_1samp_test,
-                       summarize_clusters_stc)
+                       summarize_clusters_stc, spatio_temporal_cluster_test)
 from scipy import stats as stats
 import os, glob, mne
 import numpy as np
@@ -112,7 +112,7 @@ def morph_STC(fn_stc, grade, template='fsaverage', event='LLst',
 def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, template='fsaverage'):
     con_stcs = []
     for evt in evt_list[:2]:
-        fn_stc_list1 = glob.glob(subjects_dir+'/fsaverage/DSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        fn_stc_list1 = glob.glob(subjects_dir+'/fsaverage/dSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
         for fn_stc1 in fn_stc_list1[:n_subjects]:
             stc1 = mne.read_source_estimate(fn_stc1, subject=template)
             stc1.crop(tmin, tmax)
@@ -126,7 +126,7 @@ def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, templat
    
     incon_stcs = []
     for evt in evt_list[2:]:
-        fn_stc_list2 = glob.glob(subjects_dir+'/fsaverage/DSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        fn_stc_list2 = glob.glob(subjects_dir+'/fsaverage/dSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
         for fn_stc2 in fn_stc_list2[:n_subjects]:
             stc2 = mne.read_source_estimate(fn_stc2, subject=template)
             stc2.crop(tmin, tmax)
@@ -158,38 +158,79 @@ def mv_ave(X, window, overlap, freqs=678.17):
     N_X = np.array(N_X).transpose(1,0,2,3) 
     return N_X    
     
-def stat_clus(X, tstep, fsave_vertices, n_per=1024, p_threshold=0.01, p=0.01, n_subjects=14, 
+def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05, n_subjects=14, 
                   fn_stc_out=None):
     print('Computing connectivity.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
     #    Note that X needs to be a multi-dimensional array of shape
     #    samples (subjects) x time x space, so we permute dimensions
     X = np.transpose(X, [2, 1, 0])
+    fsave_vertices = [np.arange(X.shape[-1]/2), np.arange(X.shape[-1]/2)]
     #    Now let's actually do the clustering. This can take a long time...
     #    Here we set the threshold quite high to reduce computation.
-    t_threshold = stats.distributions.t.ppf(p_threshold / 2., n_subjects - 1)
+    t_threshold = -stats.distributions.t.ppf(p_threshold / 2., n_subjects - 1)
     print('Clustering.')
     T_obs, clusters, cluster_p_values, H0 = clu = \
         spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1,
-                                        threshold=t_threshold, n_permutations=n_per)
+                                        threshold=t_threshold, n_permutations=n_per,
+                                        step_down_p=step_p)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
     #    is multiple-comparisons corrected).
     good_cluster_inds = np.where(cluster_p_values < p)[0]
     print 'the amount of significant clusters are: %d' %good_cluster_inds.shape
     ###############################################################################
-    # Visualize the clusters
+    # Save the clusters as stc file
     # ----------------------
-    print('Visualizing clusters.')
+    assert good_cluster_inds.shape != 0, ('Current p_threshold is %f %p_thr,\
+                                 maybe you need to reset a lower p_threshold')
     
     #    Now let's build a convenient representation of each cluster, where each
     #    cluster becomes a "time point" in the SourceEstimate
     stc_all_cluster_vis = summarize_clusters_stc(clu, tstep=tstep,
                                                 vertices=fsave_vertices,
                                                 subject='fsaverage')
+    
+    if fn_stc_out == None:
+        return stc_all_cluster_vis    
     stc_all_cluster_vis.save(fn_stc_out)
 
+def per2test(X1, X2, p_thr, p, tstep, n_per=8192, step_p=0.05, fn_stc_out=None):
 
-
-
+    #    Note that X needs to be a multi-dimensional array of shape
+    #    samples (subjects) x time x space, so we permute dimensions
+    n_subjects1 = X1.shape[2]
+    n_subjects2 = X2.shape[2]
+    fsave_vertices = [np.arange(X1.shape[0]/2), np.arange(X1.shape[0]/2)]
+    X1 = np.transpose(X1, [2, 1, 0])
+    X2 = np.transpose(X2, [2, 1, 0])
+    X = [X1, X2]
+    #    Now let's actually do the clustering. This can take a long time...
+    #    Here we set the threshold quite high to reduce computation.
+    f_threshold = stats.distributions.f.ppf(1. - p_thr / 2., n_subjects1 - 1, n_subjects2 - 1)
+    print('Clustering.')
+    connectivity = spatial_tris_connectivity(grade_to_tris(5))
+    T_obs, clusters, cluster_p_values, H0 = clu = \
+        spatio_temporal_cluster_test(X, n_permutations=n_per, step_down_p=step_p, 
+                                    connectivity=connectivity, n_jobs=1,
+                                    threshold=f_threshold)
+    #    Now select the clusters that are sig. at p < 0.05 (note that this value
+    #    is multiple-comparisons corrected).
+    good_cluster_inds = np.where(cluster_p_values < p)[0]
+    print 'the amount of significant clusters are: %d' %good_cluster_inds.shape
+    ###############################################################################
+    # Save the clusters as stc file
+    # ----------------------
+    assert good_cluster_inds.shape != 0, ('Current p_threshold is %f %p_thr,\
+                                 maybe you need to reset a lower p_threshold')
+    
+    #    Now let's build a convenient representation of each cluster, where each
+    #    cluster becomes a "time point" in the SourceEstimate
+    stc_all_cluster_vis = summarize_clusters_stc(clu, tstep=tstep,
+                                                vertices=fsave_vertices,
+                                                subject='fsaverage')
+    
+    if fn_stc_out == None:
+        return stc_all_cluster_vis    
+    stc_all_cluster_vis.save(fn_stc_out)
 
     
