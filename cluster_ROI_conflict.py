@@ -46,7 +46,7 @@ res_max = 0.1
 grade = 5
 # Moving average across timepoints, to reduce the sample size at the time dimension.
 mv_window = 20 # miliseconds
-overlap = 5 # miliseconds
+overlap = 10 # miliseconds
 nfreqs = 678.17
 # The parameters for t-test
 p_th = 0.001
@@ -192,14 +192,14 @@ if do_ftest:
 ###############################################################################
 # plot significant clusters
 # -----------------
-import mne
-fn_stc = stcs_path + 'left_conf_res-lh.stc' 
-fn_fig = fn_stc[:fn_stc.rfind('-lh.stc')] + '.tif'
-stc = mne.read_source_estimate(fn_stc)
-brain = stc.plot(subject='fsaverage', hemi='split', subjects_dir=subjects_dir,
-                                        time_label='Duration significant (ms)')
-brain.set_data_time_index(0)
-brain.show_view('lateral')
+#import mne
+#fn_stc = stcs_path + 'left_conf_res-lh.stc' 
+#fn_fig = fn_stc[:fn_stc.rfind('-lh.stc')] + '.tif'
+#stc = mne.read_source_estimate(fn_stc)
+#brain = stc.plot(subject='fsaverage', hemi='both', subjects_dir=subjects_dir,
+#                                        time_label='Duration significant (ms)')
+#brain.set_data_time_index(0)
+#brain.show_view('lateral')
 #brain.save_image(fn_fig)
 # blue blobs are for condition A < condition B, red for A > B
 
