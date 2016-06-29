@@ -176,7 +176,7 @@ if do_ftest:
     del X1, X2
     # Right conflict contrasts
     X3 = X[:, :, n_subjects:, 1]
-    X4 = X[:, :, :n_subjects:, 0]
+    X4 = X[:, :, n_subjects:, 0]
     fn_stc_out = stcs_path + 'right_%s' %conf_type
     per2test(X3, X4, p_thr=p_th, p_v=p_v, tstep=tstep, fn_stc_out=fn_stc_out)
     print X3.shape
