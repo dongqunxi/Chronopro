@@ -158,13 +158,14 @@ def mv_ave(X, window, overlap, freqs=678.17):
     N_X = np.array(N_X).transpose(1,0,2,3) 
     return N_X    
     
-def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05, n_subjects=14, 
+def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05, 
                   fn_stc_out=None):
     print('Computing connectivity.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
     #    Note that X needs to be a multi-dimensional array of shape
     #    samples (subjects) x time x space, so we permute dimensions
     X = np.transpose(X, [2, 1, 0])
+    n_subjects = X.shape[0]
     fsave_vertices = [np.arange(X.shape[-1]/2), np.arange(X.shape[-1]/2)]
     #    Now let's actually do the clustering. This can take a long time...
     #    Here we set the threshold quite high to reduce computation.

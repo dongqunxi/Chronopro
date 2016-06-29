@@ -55,15 +55,13 @@ p_v = 0.05
 conf_per = False
 conf_res = True
 
-# Preparing for ROIs clusterring, if all are set false, 
-# processed array is loaded directly
-do_apply_invers_ave = False
-do_apply_STC_ave = False
-do_morph_STC_ave = False
-do_calc_matrix = False 
-do_mv_ave = True
-do_ttest = True
-do_ftest = True
+do_apply_invers_ave = False # Making inverse operator
+do_apply_STC_ave = False # Inversing conduction
+do_morph_STC_ave = False # STC morphing conduction
+do_calc_matrix = False # Form the group matrix or load directly
+do_mv_ave = True #The moving average conduction
+do_ttest = True # 1sample t test conduction
+do_ftest = True # 2sample f test conduction
 
 #conflicts perception
 if conf_per == True:
@@ -88,9 +86,6 @@ if do_apply_invers_ave:
     print '>>> Calculate inverse solution ....'
     fn_evt_list = glob.glob(subjects_dir+'/*[0-9]/MEG/*fibp1-45,evtW_LLst_bc-ave.fif')
     apply_inverse_ave(fn_evt_list)
-    #for evt in st_list:
-    #    fn_evt_list = glob.glob(subjects_dir+'/*[0-9]/MEG/*fibp1-45,evtW_%s_bc-ave.fif' %evt)
-    #    apply_inverse_ave(fn_evt_list)
     print '>>> FINISHED with inverse solution.'
     print ''
  
@@ -134,7 +129,6 @@ else:
     fnmat = stcs_path + conf_type + '.npz'
     npz = np.load(fnmat)
     tstep = npz['tstep'].flatten()[0]
-    #fsave_vertices = npz['fsave_vertices']
     X = npz['X']
     print '>>> FINISHED with the group matrix loaded.'
     print ''
@@ -156,13 +150,13 @@ if do_ttest:
     # Left conflict contrasts
     Y = X[:, :, :n_subjects, 1] - X[:, :, :n_subjects, 0]  # make paired contrast
     fn_stc_out = stcs_path + 'left_%s' %conf_type
-    stat_clus(Y, tstep, p_threshold=p_th, p=p_v,  n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+    stat_clus(Y, tstep, p_threshold=p_th, p=p_v, fn_stc_out=fn_stc_out)
     print Y.shape
     del Y
     # Right conflict contrasts
     Z = X[:, :, n_subjects:, 1] - X[:, :, n_subjects:, 0]  # make paired contrast
     fn_stc_out = stcs_path + 'right_%s' %conf_type
-    stat_clus(Z, tstep, p_threshold=p_th, p=p_v, n_subjects=n_subjects, fn_stc_out=fn_stc_out)
+    stat_clus(Z, tstep, p_threshold=p_th, p=p_v, fn_stc_out=fn_stc_out)
     print X.shape, Z.shape
     del Z
     print '>>> FINISHED with the clusters generation.'
