@@ -146,7 +146,7 @@ def mv_ave(X, window, overlap, freqs=678.17):
     ''' The shape of X should be (Vertices, timepoints, subjects*2, cases)
     '''
     mv_wind = window * 0.001
-    step_wind = overlap * 0.001
+    step_wind = (window - overlap) * 0.001
     st_point = 0
     win_id = int(mv_wind * freqs)
     ste_id = int(step_wind * freqs)
@@ -158,8 +158,7 @@ def mv_ave(X, window, overlap, freqs=678.17):
     N_X = np.array(N_X).transpose(1,0,2,3) 
     return N_X    
     
-def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05, 
-                  fn_stc_out=None):
+def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, fn_clu_out=None):
     print('Computing connectivity.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
     #    Note that X needs to be a multi-dimensional array of shape
@@ -173,8 +172,7 @@ def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05,
     print('Clustering.')
     T_obs, clusters, cluster_p_values, H0 = clu = \
         spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1,
-                                        threshold=t_threshold, n_permutations=n_per,
-                                        step_down_p=step_p)
+                                        threshold=t_threshold, n_permutations=n_per)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
     #    is multiple-comparisons corrected).
     good_cluster_inds = np.where(cluster_p_values < p)[0]
@@ -184,18 +182,10 @@ def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, step_p=0.05,
     # ----------------------
     assert good_cluster_inds.shape != 0, ('Current p_threshold is %f %p_thr,\
                                  maybe you need to reset a lower p_threshold')
-    
-    #    Now let's build a convenient representation of each cluster, where each
-    #    cluster becomes a "time point" in the SourceEstimate
-    stc_all_cluster_vis = summarize_clusters_stc(clu, tstep=tstep,
-                                                vertices=fsave_vertices,
-                                                subject='fsaverage')
-    
-    if fn_stc_out == None:
-        return stc_all_cluster_vis    
-    stc_all_cluster_vis.save(fn_stc_out)
+    np.savez(fn_clu_out, clu=clu, tstep=tstep, fsave_vertices=fsave_vertices)
 
-def per2test(X1, X2, p_thr, p, tstep, n_per=8192, step_p=0.05, fn_stc_out=None):
+
+def per2test(X1, X2, p_thr, p, tstep, n_per=8192, fn_clu_out=None):
 
     #    Note that X needs to be a multi-dimensional array of shape
     #    samples (subjects) x time x space, so we permute dimensions
@@ -211,7 +201,7 @@ def per2test(X1, X2, p_thr, p, tstep, n_per=8192, step_p=0.05, fn_stc_out=None):
     print('Clustering.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
     T_obs, clusters, cluster_p_values, H0 = clu = \
-        spatio_temporal_cluster_test(X, n_permutations=n_per, step_down_p=step_p, 
+        spatio_temporal_cluster_test(X, n_permutations=n_per, 
                                     connectivity=connectivity, n_jobs=1,
                                     threshold=f_threshold)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
@@ -223,15 +213,21 @@ def per2test(X1, X2, p_thr, p, tstep, n_per=8192, step_p=0.05, fn_stc_out=None):
     # ----------------------
     assert good_cluster_inds.shape != 0, ('Current p_threshold is %f %p_thr,\
                                  maybe you need to reset a lower p_threshold')
-    
+    np.savez(fn_clu_out, clu=clu, tstep=tstep, fsave_vertices=fsave_vertices)
+   
+def clu2STC(fn_cluster, p_thre=0.05, tmin=0.):
     #    Now let's build a convenient representation of each cluster, where each
     #    cluster becomes a "time point" in the SourceEstimate
-    stc_all_cluster_vis = summarize_clusters_stc(clu, tstep=tstep,
-                                                vertices=fsave_vertices,
+    fn_stc_out = fn_cluster[:fn_cluster.rfind('.npz')] + ',temp_%.3f,tmin_%.3f' %(p_thre, tmin)
+    npz = np.load(fn_cluster)
+    tstep = npz['tstep'].flatten()[0]
+    clu = npz['clu']
+    fsave_vertices = list(npz['fsave_vertices'])
+    stc_all_cluster_vis = summarize_clusters_stc(clu, p_thre, tstep=tstep, 
+                                                 tmin=tmin, vertices=fsave_vertices,
                                                 subject='fsaverage')
     
     if fn_stc_out == None:
         return stc_all_cluster_vis    
     stc_all_cluster_vis.save(fn_stc_out)
-
     
