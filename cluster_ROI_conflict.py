@@ -49,8 +49,10 @@ mv_window = 20 # miliseconds
 overlap = 10 # miliseconds
 nfreqs = 678.17
 # The parameters for t-test
-p_th = 0.01
+p_th = 0.001
 p_v = 0.05
+permutation = 1024 #8192
+step_p = 0 # 0.05
 # Set the option for conflicts perception or conflicts response
 conf_per = False
 conf_res = True
@@ -61,7 +63,7 @@ do_morph_STC_ave = False # STC morphing conduction
 do_calc_matrix = False # Form the group matrix or load directly
 do_mv_ave = True #The moving average conduction
 do_ttest = True # 1sample t test conduction
-do_ftest = True # 2sample f test conduction
+do_ftest = False # 2sample f test conduction
 
 #conflicts perception
 if conf_per == True:
@@ -137,7 +139,7 @@ else:
 # -----------------
 if do_mv_ave:  
     print '>>> Moving averages with window length %dms ....' %(mv_window)
-    conf_type = 'mv_' + conf_type  
+    conf_type = 'mv%d_' %overlap + conf_type  
     X = mv_ave(X, mv_window, overlap, freqs=nfreqs)
     print '>>> FINISHED with the smothed group matrix generation.'
     print ''
@@ -150,13 +152,15 @@ if do_ttest:
     # Left conflict contrasts
     Y = X[:, :, :n_subjects, 1] - X[:, :, :n_subjects, 0]  # make paired contrast
     fn_stc_out = stcs_path + 'left_%s' %conf_type
-    stat_clus(Y, tstep, p_threshold=p_th, p=p_v, fn_stc_out=fn_stc_out)
+    stat_clus(Y, tstep, n_per=permutation, p_threshold=p_th, p=p_v, step_p=step_p,
+              fn_stc_out=fn_stc_out)
     print Y.shape
     del Y
     # Right conflict contrasts
     Z = X[:, :, n_subjects:, 1] - X[:, :, n_subjects:, 0]  # make paired contrast
     fn_stc_out = stcs_path + 'right_%s' %conf_type
-    stat_clus(Z, tstep, p_threshold=p_th, p=p_v, fn_stc_out=fn_stc_out)
+    stat_clus(Z, tstep, n_per=permutation, p_threshold=p_th, p=p_v, step_p=step_p,
+                fn_stc_out=fn_stc_out)
     print X.shape, Z.shape
     del Z
     print '>>> FINISHED with the clusters generation.'
@@ -171,14 +175,16 @@ if do_ftest:
     X1 = X[:, :, :n_subjects, 1]
     X2 = X[:, :, :n_subjects, 0]
     fn_stc_out = stcs_path + 'left_%s' %conf_type
-    per2test(X1, X2, p_thr=p_th, p_v=p_v, tstep=tstep, fn_stc_out=fn_stc_out)
+    per2test(X1, X2, p_thr=p_th, p_v=p_v, tstep=tstep, n_per=permutation, step_p=step_p, 
+             fn_stc_out=fn_stc_out)
     print X1.shape
     del X1, X2
     # Right conflict contrasts
     X3 = X[:, :, n_subjects:, 1]
     X4 = X[:, :, n_subjects:, 0]
     fn_stc_out = stcs_path + 'right_%s' %conf_type
-    per2test(X3, X4, p_thr=p_th, p_v=p_v, tstep=tstep, fn_stc_out=fn_stc_out)
+    per2test(X3, X4, p_thr=p_th, p_v=p_v, tstep=tstep, n_per=permutation, step_p=step_p,
+             fn_stc_out=fn_stc_out)
     print X3.shape
     del X, X3, X4
     print '>>> FINISHED with the clusters generation.'
@@ -190,7 +196,7 @@ if do_ftest:
 #fn_stc = stcs_path + 'left_conf_res-lh.stc' 
 #fn_fig = fn_stc[:fn_stc.rfind('-lh.stc')] + '.tif'
 #stc = mne.read_source_estimate(fn_stc)
-#brain = stc.plot(subject='fsaverage', hemi='split', subjects_dir=subjects_dir,
+#brain = stc.plot(subject='fsaverage', hemi='both', subjects_dir=subjects_dir,
 #                                        time_label='Duration significant (ms)')
 #brain.set_data_time_index(0)
 #brain.show_view('lateral')
