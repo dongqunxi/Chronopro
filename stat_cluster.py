@@ -89,7 +89,7 @@ def apply_STC_ave(fnevo, method='dSPM', snr=3.0, min_subject='fsaverage'):
         
 
 def morph_STC(fn_stc, grade, template='fsaverage', event='LLst', 
-              baseline=True, btmin=-0.3, btmax=-0.1):
+              baseline=True, btmin=-0.3, btmax=0.):
     from mne import read_source_estimate, morph_data
     fnlist = get_files_from_list(fn_stc) 
     for fname in fnlist:  
@@ -98,7 +98,7 @@ def morph_STC(fn_stc, grade, template='fsaverage', event='LLst',
         stc_name = name[:name.rfind('-ave.fif')] 
         min_dir = subjects_dir + '/%s' %template
         # this path used for ROI definition
-        stc_path = min_dir + '/DSPM_ROIs/%s' %(subject)
+        stc_path = min_dir + '/dSPM_ROIs/%s' %(subject)
         #fn_cov = meg_path + '/%s_empty,fibp1-45,nr-cov.fif' % subject
         set_directory(stc_path) 
         # Morph STC
@@ -107,7 +107,7 @@ def morph_STC(fn_stc, grade, template='fsaverage', event='LLst',
         stc_morph.save(stc_path + '/%s' % (stc_name), ftype='stc')
         if baseline == True:
             stc_base = stc_morph.crop(btmin, btmax)
-            stc_base.save(stc_path + '/%s_%s_baseline' % (subject, event), ftype='stc') 
+            stc_base.save(stc_path + '/%s_%s_baseline' % (subject, event[:2]), ftype='stc') 
                     
 def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, template='fsaverage'):
     con_stcs = []
@@ -142,6 +142,37 @@ def Ara_contr(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, templat
     np.savez(stcs_path + '%s.npz' %conf_type, X=X, tstep=tstep, fsave_vertices=fsave_vertices)
     return tstep, fsave_vertices, X
     
+def Ara_contr_base(evt_list, tmin, tmax, conf_type, stcs_path, n_subjects=14, template='fsaverage'):
+    stcs = []
+    bs_stcs = []
+    for evt in evt_list:
+        fn_stc_list1 = glob.glob(subjects_dir+'/fsaverage/dSPM_ROIs/*[0-9]/*fibp1-45,evtW_%s_bc-lh.stc' %evt)
+        for fn_stc1 in fn_stc_list1[:n_subjects]:
+            #fn_stc2 = fn_stc1.split(evt)[0] + evt[:2] +  fn_stc1.split(evt)[1]
+            name = os.path.basename(fn_stc1)
+            fn_path = os.path.split(fn_stc1)[0]
+            subject = name.split('_')[0]
+            fn_stc2 = fn_path + '/%s_%s_baseline-lh.stc' % (subject, evt[:2])
+            stc1 = mne.read_source_estimate(fn_stc1, subject=template)
+            stc1.crop(tmin, tmax)
+            stcs.append(stc1.data)
+            stc2 = mne.read_source_estimate(fn_stc2, subject=template)
+            bs_stcs.append(stc2.data)
+    stcs_ = np.array(stcs).transpose(1,2,0) 
+    bsstcs = np.array(bs_stcs).transpose(1,2,0)
+    #tmin = stc1.tmin 
+    tstep = stc1.tstep 
+    fsave_vertices = stc1.vertices
+    del stc1, stc2
+    X = [stcs_[:, :, :], bsstcs[:, :, :]]
+    #import pdb
+    #pdb.set_trace()
+    # save data matrix
+    X = np.array(X).transpose(1,2,3,0)
+    X = np.abs(X)  # only magnitude
+    np.savez(stcs_path + '%s.npz' %conf_type, X=X, tstep=tstep, fsave_vertices=fsave_vertices)
+    return tstep, fsave_vertices, X  
+      
 def mv_ave(X, window, overlap, freqs=678.17):
     ''' The shape of X should be (Vertices, timepoints, subjects*2, cases)
     '''
@@ -158,7 +189,7 @@ def mv_ave(X, window, overlap, freqs=678.17):
     N_X = np.array(N_X).transpose(1,0,2,3) 
     return N_X    
     
-def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, fn_clu_out=None):
+def stat_clus(X, tstep, time_thre=0, n_per=8192, p_threshold=0.01, p=0.05, fn_clu_out=None):
     print('Computing connectivity.')
     connectivity = spatial_tris_connectivity(grade_to_tris(5))
     #    Note that X needs to be a multi-dimensional array of shape
@@ -170,8 +201,9 @@ def stat_clus(X, tstep, n_per=8192, p_threshold=0.01, p=0.05, fn_clu_out=None):
     #    Here we set the threshold quite high to reduce computation.
     t_threshold = -stats.distributions.t.ppf(p_threshold / 2., n_subjects - 1)
     print('Clustering.')
+    max_step = int(time_thre * 0.001 / tstep) + 1
     T_obs, clusters, cluster_p_values, H0 = clu = \
-        spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1,
+        spatio_temporal_cluster_1samp_test(X, connectivity=connectivity, n_jobs=1, max_step=max_step,
                                         threshold=t_threshold, n_permutations=n_per)
     #    Now select the clusters that are sig. at p < 0.05 (note that this value
     #    is multiple-comparisons corrected).
