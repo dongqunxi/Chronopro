@@ -73,6 +73,56 @@ def apply_STC_epo(fnepo, event, method='dSPM', snr=3.0, min_subject='fsaverage')
                             % (str(s)), ftype='stc')
             s = s + 1
         
+def cal_labelts(stcs_path, fn_func_list, condition='LLst', min_subject='fsaverage'):
+    '''Extract stcs from special ROIs, and store them for funther causality
+       analysis.
+       Parameter
+       ---------
+       stcs_path: string
+            The path of stc's epochs.
+       fn_ana_list: string
+            The path of the file including pathes of functional labels.
+       condition: string
+            The condition for experiments.
+       min_subject: the subject for common brain
+    '''
+    path_list = get_files_from_list(stcs_path)
+    minpath = subjects_dir + '/%s' % (min_subject)
+    srcpath = minpath + '/bem/fsaverage-ico-5-src.fif'
+    src_inv = mne.read_source_spaces(srcpath)
+    # loop across all filenames
+    for stcs_path in path_list:
+        caupath = stcs_path[:stcs_path.rfind('/%s' %condition)] 
+        fn_stcs_labels = caupath + '/%s_labels_ts.npy' % (condition)
+        _, _, files = os.walk(stcs_path).next()
+        trials = len(files) / 2
+        # Get unfiltered and morphed stcs
+        stcs = []
+        i = 0
+        while i < trials:
+            fn_stc = stcs_path + 'trial%s_fsaverage' % (str(i))
+            stc = mne.read_source_estimate(fn_stc + '-lh.stc',
+                                           subject=min_subject)
+            stcs.append(stc)
+            i = i + 1
+        # Get common labels
+        list_file = fn_func_list
+        with open(list_file, 'r') as fl:
+                  file_list = [line.rstrip('\n') for line in fl]
+        fl.close()
+        rois = []
+        labels = []
+        for f in file_list:
+            label = mne.read_label(f)
+            labels.append(label)
+            rois.append(label.name)
+        # Extract stcs in common labels
+        label_ts = mne.extract_label_time_course(stcs, labels, src_inv,
+                                                 mode='pca_flip')
+        #make label_ts's shape as (sources, samples, trials)
+        label_ts = np.asarray(label_ts).transpose(1, 2, 0)
+        np.save(fn_stcs_labels, label_ts)
+        
 def _mvdetrend(data):
     '''Multivariate polynomial detrend of time series data.
        refer:http://users.sussex.ac.uk/~lionelb/MVGC/html/mvdetrend.html.
@@ -113,7 +163,7 @@ def _mvdetrend(data):
         Y[:, :, r] = data[:, :, r] - P
     return Y
 
-def normalize_data(fn_ts, factor=1):
+def normalize_data(fn_ts, fs=678, pre_t=0.2, factor=1):
     '''
        Before causal model construction, labelts need to be normalized further:
         1) Downsampling for reducing the time consuming.
@@ -131,18 +181,23 @@ def normalize_data(fn_ts, factor=1):
     for fnts in path_list:
         fnnorm = fnts[:fnts.rfind('.npy')] + ',%d-norm.npy' % factor
         label_ts = np.load(fnts)
-        assert label_ts.shape[1] / factor > label_ts.shape[-1], \
-            ('Trial length can not be smaller than the amount of trials.')
-        if factor > 1:
-            #downsampled
-            dw_data = signal.decimate(label_ts, q=factor, axis=1)
-        else:
-            dw_data = label_ts
+        #assert label_ts.shape[1] / factor > label_ts.shape[-1], \
+        #    ('Trial length can not be smaller than the amount of trials.')
+        #if factor > 1:
+        #    #downsampled
+        #    dw_data = signal.decimate(label_ts, q=factor, axis=1)
+        #else:
+        #    dw_data = label_ts
         #zscore
-        dt_data = _mvdetrend(dw_data)
-        d_mu = dt_data.mean(axis=1, keepdims=True)
-        d_std = dt_data.std(axis=1, ddof=1, keepdims=True)
-        z_data = (dt_data - d_mu) / d_std
+        #dt_data = _mvdetrend(dw_data)
+        d_pre = label_ts[:, :int(pre_t*fs), :]
+        d_pos = label_ts[:, int(pre_t*fs):, :]
+        d_mu = d_pre.mean(axis=1, keepdims=True)
+        d_std = d_pre.std(axis=1, ddof=1, keepdims=True)
+        z_data = (d_pos - d_mu) / d_std
+        #d_mu = dw_data.mean(axis=1, keepdims=True)
+        #d_std = dw_data.std(axis=1, ddof=1, keepdims=True)
+        #z_data = (dw_data - d_mu) / d_std
         np.save(fnnorm, z_data)
 
 def _plot_morder(bic, morder, figmorder):
@@ -354,6 +409,7 @@ def _durbinwatson(X, E):
     pval = _normcdf(dw, mu, sigma)
     pval = 2 * min(pval, 1-pval)
     return dw, pval
+    
 def _significance(pval, alpha=0.05):
 
     sig = np.zeros(pval.shape)
@@ -361,19 +417,34 @@ def _significance(pval, alpha=0.05):
     nn = ~np.isnan(pval)
     p = pval[nn]
     p.sort()
-    m = len(p)
+    m = p.size
     thresh = (np.arange(m)+1) * alpha / m
     rej = p <= thresh
     max_id = rej.nonzero()[0]
-    if not max_id:
+    if max_id.size == 0:
         crit_p = 0
         h = np.logical_and(p, 0)
     else:
-        max_id = max_id[0][-1]
+        max_id = max_id[-1]
         crit_p = p[max_id]
         h = p <= crit_p
     sig[nn] = h
-    
+    nowhite=sig.nonzero()[0]
+    if nowhite.size == 0:
+        print 'all residuals are white by Durbin-Wastson test at significance %.2f' %alpha
+        return True
+    else:
+        print 'WARNING: autocorrelated residuals at significance %.2f for variable(s):%s' %(alpha, nowhite)
+        return False
+        
+def _demean(X):
+    n, m, N = X.shape
+    U = np.ones((1, N*m))
+    Y = X.reshape((n, N*m), order = 'F')
+    #Y_m = Y.mean(axis=1, keepdims=True)
+    Y  = Y-Y.mean(axis=1, keepdims=True)*U
+    Y = Y.reshape((n, m, N), order = 'F')
+    return Y
     
 def _whiteness(X,E):
 
@@ -394,6 +465,7 @@ def _whiteness(X,E):
              Vector of p-values.
     """
     n, m, N = X.shape
+    X = _demean(X)
     dw = np.zeros(n)
     pval = np.zeros(n)
     for i in xrange(n):
@@ -402,8 +474,8 @@ def _whiteness(X,E):
         tempX = np.reshape(X, (n, m * N), order='F')
         tempE = np.reshape(Ei, (e_a * e_b), order='F')
         dw[i], pval[i] = _durbinwatson(tempX, tempE)
-    
-    return dw, pval
+    white = _significance(pval)
+    return white
 
 # Consistency test                    
 def _consistency(X, E):
@@ -422,6 +494,7 @@ def _consistency(X, E):
     '''
     n, m, N = X.shape
     p = m - E.shape[1]
+    X = _demean(X)
     X = X[:, p:m, :]
     n1, m1, N1 = X.shape
     X = np.reshape(X, (n1, m1 * N1), order='F')
@@ -459,13 +532,11 @@ def model_estimation(fn_norm, thr_cons=0.8, whit_min=1., whit_max=3., pmax=100):
     # loop across all filenames
     for fnnorm in path_list:
         fneval = fnnorm[:fnnorm.rfind('.npy')] + '_evaluation.txt'
-        morder = _model_order(fnnorm, pmax)
+        #morder = _model_order(fnnorm, pmax)
+        morder = 21
         X = np.load(fnnorm)
         A, SIG, E = _tsdata_to_var(X, morder)
-        whi = False
-        dw, pval = _whiteness(X, E)
-        if np.all(dw < whit_max) and np.all(dw > whit_min):
-            whi = True
+        whi = _whiteness(X, E)
         cons = _consistency(X, E)
         X = X.transpose(1, 0, 2)
         mvar = scot.var.VAR(morder)
