@@ -17,7 +17,7 @@ import os, glob
 #from dirs_manage import set_directory
 from apply_causality import apply_inverse_oper, apply_STC_epo
 from apply_causality import cal_labelts,normalize_data, sig_thresh, group_causality
-from apply_causality import model_order, model_estimation, causal_analysis
+from apply_causality import model_order, model_estimation, causal_analysis, plt_conditions, diff_mat
 print(__doc__)
 
 ###############################################################################
@@ -29,7 +29,8 @@ stcs_path = subjects_dir + '/fsaverage/conf_stc/'
 #set_directory(stcs_path) 
 template = 'fsaverage'
 st_list = ['LLst', 'RRst', 'RLst',  'LRst']
-
+sfreq = 678.17
+freqs = [(4, 8), (8, 12), (12, 18), (18, 30), (30, 40)]
 
 # Cluster operation
 do_apply_invers_oper = False # Making inverse operator
@@ -37,11 +38,12 @@ do_apply_STC_epo = False # Making STCs
 do_extract_rSTCs = False   
 do_norm = False
 do_morder = False
-do_moesti = True
+do_moesti = False
 do_cau = True
-do_sig_est = True
+do_sig_est = False
 do_group = True
-
+do_group_plot = False
+do_diff = False
 ###############################################################################
 # Make inverse operator for each subject
 # ------------------------------------------------
@@ -103,7 +105,7 @@ if do_morder:
     print '>>> Calculate the optimized Model order....'
     fn_norm = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/*_labels_ts,norm.npy')
     # Get optimized model order using BIC
-    model_order(fn_norm)
+    model_order(fn_norm, p_max=100)
     print '>>> FINISHED with optimized model order generation.'
     print ''
 if do_moesti:
@@ -115,7 +117,7 @@ if do_moesti:
 if do_cau:
     print '>>> Make the causality analysis....'
     fn_monorm = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/*_labels_ts,norm,morder_*.npz')
-    causal_analysis(fn_monorm, repeats=500)
+    causal_analysis(fn_monorm, repeats=500, method='GPDC')
     print '>>> FINISHED with causal matrices and surr-causal matrices generation.'
     print ''
 ###############################################################################
@@ -123,8 +125,6 @@ if do_cau:
 # ------------------------------------------------
 if do_sig_est:
     print '>>> Estimate the significance of the causality matrices....'
-    sfreq = 678.17
-    freqs = [(4, 8), (8, 12), (12, 18), (18, 30), (30, 40)]
     fn_cau = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/*,cau.npy')
     sig_thresh(cau_list=fn_cau, sfreq=sfreq, freqs=freqs, alpha=0.01)
     print '>>> FINISHED with significant causal matrices generation.'
@@ -135,39 +135,33 @@ if do_sig_est:
 if do_group:
     print '>>> Generate the group causal matrices....'
     for evt_st in st_list:
-        fnsig_list = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/sig_cau/*%s_sig_con_band.npy' %evt_st)
+        fnsig_list = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/sig_cau/%s_sig_con_band.npy' %evt_st)
         group_causality(fnsig_list, evt_st, submount=14)
     print '>>> FINISHED with group causal matrices generation.'
-    print ''    
-    
+    print ''   
+     
+###############################################################################
+# Plot group matrices
+# ------------------------------------------------
+if do_group_plot: 
+    cau_path = '/home/qdong/data/Chrono/18subjects/mne/freesurfer/subjects/fsaverage/causality'
+    plt_conditions(cau_path, st_list)
+
 ###############################################################################
 # Make differences
 # ------------------------------------------------
+if do_diff:
+    #Difference between incongruent and congruent tasks
+    for ifreq in freqs:
+        fmin = ifreq[0]
+        fmax = ifreq[1] 
+        diff_mat(fmin=fmin, fmax=fmax)
 
-#
-#    #Inverse epochs into the source space
-#    #fn_epo = glob.glob(subjects_dir+'/*/MEG/*evtW_%s_bc-epo.fif' %evt_st)
-#    #apply_inverse_epo(fn_epo,method=method, event=evt_st)
-#    #Calculate the representative STCs(rSTCs) for each ROI.
-#    #stcs_path = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/%s/' %evt_st)
-#    #cal_labelts(stcs_path, func_list_file, condition=evt_st, min_subject='fsaverage')
-#    ##Normalize rSTCs
-#    #fn_ts = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/%s_labels_ts.npy' %evt_st)
-#    #normalize_data(fn_ts) 
-#    #MVAR model construction and evaluation, individual causality analysis for
-#    #each condition 
-#    fn_norm = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/%s_labels_ts,1-norm.npy' %evt_st)
-#    model_estimation(fn_norm)
-#    causal_analysis(fn_norm, method='PDC')
-#    #Estimate the significance of each causal matrix.
-#    fn_cau = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/%s_labels_ts,1-norm,cau.npy' %evt_st)
-#    sig_thresh(cau_list=fn_cau, condition=evt_st, sfreq=sfreq)
-#    ##Group causality analysis 
-#    fn_sig = glob.glob(subjects_dir+'/fsaverage/stcs/*[0-9]/sig_con/%s_sig_con_band.npy' %evt_st)
-#    group_causality(fn_sig, evt_st, submount=13)
-#    
-##Difference between incongruent and congruent tasks
-#for ifreq in freqs:
-#    fmin = ifreq[0]
-#    fmax = ifreq[1] 
-#    diff_mat(fmin=fmin, fmax=fmax)
+#import os
+#import numpy as np
+#fmin, fmax = 18, 30
+#subjects_dir = os.environ['SUBJECTS_DIR']
+#mat_dir = subjects_dir + '/fsaverage/causality'
+#fn_com = mat_dir + '/incon_con_%d-%dHz.npy' %(fmin, fmax)
+#com = np.load(fn_com)
+#print np.argwhere(com)+1
