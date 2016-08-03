@@ -614,7 +614,7 @@ def model_estimation(fn_norm, thr_cons=0.8, whit_min=1., whit_max=3., morder=Non
             f.write('model_order, whiteness, consistency, stability: %d, %s, %f, %s\n' 
                     %(morder, str(whi), cons, str(is_st)))
 
-def causal_analysis(fn_norm, method='PDC', morder=None, repeats=1000):
+def causal_analysis(fn_norm, method='GPDC', morder=None, repeats=1000):
     '''
         Calculate causality matrices of real data and surrogates.
         Parameters
@@ -643,7 +643,7 @@ def causal_analysis(fn_norm, method='PDC', morder=None, repeats=1000):
         X = X.transpose(2, 0, 1)
         mvar = scot.var.VAR(morder)
         c_surrogates = scs.surrogate_connectivity(method, X, mvar,
-                                                  repeats=repeats)
+                                                  repeats=repeats, n_jobs=2)
         mvar.fit(X)
         con = connectivity(method, mvar.coef, mvar.rescov)
         np.save(fncau, con)
@@ -882,3 +882,71 @@ def group_causality(sig_list, condition, freqs = [(4, 8), (8, 12), (12, 18), (18
         plt.savefig(cau_path + '/%s_%s_%sHz.png' %
                     (condition, str(fmin), str(fmax)), dpi=100)
         plt.close()
+        
+def plt_conditions(cau_path, st_list, nfreqs = [(4, 8), (8, 12), (12, 18), (18, 30), (30,40)]):
+    #lbls = ['1', 'R2', 'R3','R4', 'R5', 'R6','R7', 'R8', 'R9','R10', 'R11', 'R12',
+     #      'R13', 'R14', 'R15','R16', 'R17', 'R18','R19', 'R20', 'R21','R22', 'R23', 'R24']
+    lbls = np.arange(24) + 1
+    for ifreq in nfreqs:
+        fmin, fmax = ifreq[0], ifreq[1]
+        fig_fobj = cau_path + '/conditions4_%d_%dHz.tiff' %(fmin,fmax)
+        fig, axar = plt.subplots(2,2)
+        #cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7]) 
+        for i,ax in enumerate(axar.flat):
+            X = np.load(cau_path + '/%s_%d_%dHz.npy' %(st_list[i],fmin,fmax))
+            ax.imshow(X, interpolation='nearest'
+                    , origin='lower') 
+            title = st_list[i]    
+            ax.grid(False)
+            ax.set_title(title)
+            ax.set_yticks(np.arange(24))
+            ax.set_xticks(np.arange(24))
+            ax.set_xticklabels(lbls)
+            ax.set_yticklabels(lbls)
+        #fig.colorbar(im, cax=cbar_ax)
+        fig.tight_layout()
+        #fig.savefig(fig_fobj)
+        #plt.close()
+        
+def diff_mat(fmin, fmax, incon_event=['LRst', 'RLst'], con_event=['LLst', 'RRst']):
+    """
+        make comparisons between two conditions' group causal matrices
+        ----------
+        con_event: list
+            The list of congruent conditions.
+        incon_event: string
+            The name of incongruent condition.  
+        fmin, fmax:int
+            The interest bandwidth.    
+        min_subject: string
+            The subject for the common brain space.
+        
+    """
+    mat_dir = subjects_dir + '/fsaverage/causality'
+    fn_con1 = mat_dir + '/%s_%d_%dHz.npy' %(con_event[0], fmin, fmax)
+    fn_con2 = mat_dir + '/%s_%d_%dHz.npy' %(con_event[1], fmin, fmax)
+    fn_incon1 = mat_dir + '/%s_%d_%dHz.npy' %(incon_event[0], fmin, fmax)
+    fn_incon2 = mat_dir + '/%s_%d_%dHz.npy' %(incon_event[1], fmin, fmax)
+    con_cau1 = np.load(fn_con1)
+    con_cau2 = np.load(fn_con2)
+    con_cau = con_cau1 + con_cau2
+    incon_cau = np.load(fn_incon1) + np.load(fn_incon2)
+    con_cau[con_cau > 0] = 1
+    incon_cau[incon_cau > 0] = 1
+    dif_cau = incon_cau - con_cau
+    dif_cau[dif_cau < 0] = 0
+    com_cau = incon_cau - dif_cau
+    com_cau[com_cau < 0] = 0
+    fn_dif = mat_dir + '/incon_con_%d-%dHz.npy' %(fmin, fmax)
+    fn_com = mat_dir + '/com_incon_con_%d-%dHz.npy' %(fmin, fmax)
+    fig_dif = mat_dir + '/incon_con_%d-%dHz.png' %(fmin, fmax)
+    plt.imshow(dif_cau, interpolation='nearest')
+    plt.xticks(np.arange(24), np.arange(24)+1, fontsize=9)
+    plt.yticks(np.arange(24), np.arange(24)+1, fontsize=9)
+    plt.tight_layout(pad=2)
+    plt.show()
+    plt.savefig(fig_dif, dpi=300)
+    plt.close()
+    np.save(fn_dif, dif_cau)
+    np.save(fn_com, com_cau)
+    print np.argwhere(dif_cau)
