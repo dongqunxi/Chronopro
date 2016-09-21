@@ -4,9 +4,9 @@ from mne.preprocessing import ICA, read_ica
 from jumeg.jumeg_preprocessing import get_ics_cardiac, get_ics_ocular
 from jumeg.jumeg_plot import plot_performance_artifact_rejection
 
-path_data = '/home/jdammers/sciebo/Documents/MEG/Verwaltung/Personal/Students/PhD/2013-2016_Dong-Qunxi/Manuscript_Chrono-Analysis/2016_2-Methods/SCoT-debug/data/109077_ica/'
+#path_data = '/home/jdammers/sciebo/Documents/MEG/Verwaltung/Personal/Students/PhD/2013-2016_Dong-Qunxi/Manuscript_Chrono-Analysis/2016_2-Methods/SCoT-debug/data/109077_ica/'
 
-
+path_data = '/home/uais/data/freesurfer/subjects/109077/MEG/'
 # -------------------------------------------------------
 # read continuous unfiltered raw data and apply filter
 # -------------------------------------------------------
@@ -60,7 +60,7 @@ sources.plot(n_channels=25, duration=120,scalings=dict(misc=3, eog=4e-4, ecg=1e-
 
 # put here all the component indices for removal
 # for this data I also rejected IC41 (EOG artifact) by visual inspection
-ica.exclude = [ 6, 12, 13, 35, 40, 59]
+ica.exclude = list(ica.exclude) + list([ 6, 12, 13, 35, 40, 59])
 
 
 
@@ -87,10 +87,11 @@ plot_performance_artifact_rejection(raw_orig, ica, fn_perf, show=True)
 # save results
 # -------------------------------------------------------
 # maybe you keep a copy of the original OCARTA raw fileimport shutil
+import shutil
 shutil.copy2(fn_raw,fn_raw+'.orig' )
 
 # save/overwrite cleaned data 
-raw_orig.save(fn_raw, overwrite=True)
+raw_new.save(fn_raw, overwrite=True)
 
 
 # now create epochs and check for bad epochs
