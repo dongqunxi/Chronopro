@@ -80,7 +80,8 @@ fn_perf = fn_ica[:-4]+',perf'
 ica.save(fn_ica)
 # Note, there is a problem with the MNE peak detection of EOG peaks
 # therefore the we only find a few peaks in the EOG signal
-plot_performance_artifact_rejection(raw_orig, ica, fn_perf, show=True)
+raw_orig = mne.io.read_raw_fif(fn_raw, preload=True)
+plot_performance_artifact_rejection(raw_orig, ica, fn_perf, meg_clean=raw_new, show=True)
 
 
 # -------------------------------------------------------
